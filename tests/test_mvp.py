@@ -38,7 +38,7 @@ def test_llm_response_validation() -> None:
             "operation_date": "2026-09-27",
         }
     )
-    assert parsed.amount == Decimal("1400")
+    assert parsed.amount == Decimal(1400)
     with pytest.raises(ValidationError):
         ParsedOperation.model_validate({"intent": "delete_everything"})
 
@@ -99,7 +99,7 @@ def transaction(**overrides: object) -> Transaction:
         "scope_id": "scope",
         "scope_name": "Личное",
         "operation_type": OperationType.EXPENSE,
-        "amount": Decimal("100"),
+        "amount": Decimal(100),
         "currency": "RUB",
         "account_from_id": "a",
         "status": "confirmed",
@@ -121,32 +121,36 @@ def test_balance_and_reversed_exclusion() -> None:
         scope_id="scope",
         name="Карта",
         currency="RUB",
-        opening_balance=Decimal("1000"),
+        opening_balance=Decimal(1000),
     )
     values = calculate_balances(
         [account],
         [
             transaction(),
-            transaction(transaction_id="tx_2", amount=Decimal("500"), status="reversed"),
+            transaction(transaction_id="tx_2", amount=Decimal(500), status="reversed"),
         ],
     )
-    assert values["a"] == Decimal("900")
+    assert values["a"] == Decimal(900)
 
 
 def test_transfer_between_accounts() -> None:
     accounts = [
-        Account(account_id="a", scope_id="s", name="A", currency="RUB", opening_balance=100),
-        Account(account_id="b", scope_id="s", name="B", currency="RUB", opening_balance=0),
+        Account(
+            account_id="a", scope_id="s", name="A", currency="RUB", opening_balance=100
+        ),
+        Account(
+            account_id="b", scope_id="s", name="B", currency="RUB", opening_balance=0
+        ),
     ]
     tx = transaction(
         operation_type=OperationType.TRANSFER,
         account_from_id="a",
         account_to_id="b",
-        amount=Decimal("40"),
+        amount=Decimal(40),
     )
     assert calculate_balances(accounts, [tx]) == {
-        "a": Decimal("60"),
-        "b": Decimal("40"),
+        "a": Decimal(60),
+        "b": Decimal(40),
     }
 
 

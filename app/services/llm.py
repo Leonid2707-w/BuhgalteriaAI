@@ -25,6 +25,7 @@ def build_prompt(
         "timezone": timezone,
         "user_text": sanitize_for_ai(text),
         "directories": directories,
+        "required_json_schema": ParsedOperation.model_json_schema(),
         "rules": [
             "Выбирай только существующие активные ID.",
             "Если совпадения нет, верни ID=null и suggested_*_name.",
@@ -72,9 +73,7 @@ class LLMParser(ABC):
 
 
 class DeepSeekParser(LLMParser):
-    def __init__(
-        self, api_key: str, base_url: str, model: str, timeout: float
-    ) -> None:
+    def __init__(self, api_key: str, base_url: str, model: str, timeout: float) -> None:
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model

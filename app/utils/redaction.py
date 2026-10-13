@@ -1,9 +1,7 @@
 import re
 
 CARD_LIKE = re.compile(r"(?<!\d)(?:\d[\s-]?){11,18}\d(?!\d)")
-SECRET_ASSIGNMENT = re.compile(
-    r"(?i)(api[_-]?key|token|password|secret)\s*[:=]\s*\S+"
-)
+SECRET_ASSIGNMENT = re.compile(r"(?i)(api[_-]?key|token|password|secret)\s*[:=]\s*\S+")
 
 
 def redact_sensitive(value: str) -> str:

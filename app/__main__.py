@@ -37,9 +37,7 @@ async def main() -> int:
         settings.http_timeout_seconds,
     )
     bot = Bot(settings.telegram_bot_token)
-    dispatcher = await create_dispatcher(
-        settings, store, sheets, parser, transcriber
-    )
+    dispatcher = await create_dispatcher(settings, store, sheets, parser, transcriber)
     try:
         await set_commands(bot)
         await dispatcher.start_polling(bot)

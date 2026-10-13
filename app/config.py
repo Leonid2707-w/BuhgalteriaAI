@@ -24,9 +24,7 @@ class Settings(BaseSettings):
     deepseek_model: str = ""
     openai_chat_model: str = ""
     google_spreadsheet_id: str = ""
-    google_service_account_file: Path = Path(
-        "credentials/google-service-account.json"
-    )
+    google_service_account_file: Path = Path("credentials/google-service-account.json")
     sqlite_path: Path = Path("data/finance_bot.db")
     log_level: str = "INFO"
     store_raw_text: bool = True
@@ -66,13 +64,17 @@ class Settings(BaseSettings):
             errors.append(
                 f"Файл Service Account не найден: {self.google_service_account_file}"
             )
+        if not self.openai_api_key:
+            errors.append(
+                "OPENAI_API_KEY не заполнен - он нужен для голосовых сообщений"
+            )
         if self.llm_provider == "deepseek":
             if not self.deepseek_api_key:
                 errors.append("DEEPSEEK_API_KEY не заполнен")
             if not self.deepseek_model:
                 errors.append("DEEPSEEK_MODEL не заполнен")
-        elif not self.openai_api_key or not self.openai_chat_model:
-            errors.append("OPENAI_API_KEY и OPENAI_CHAT_MODEL должны быть заполнены")
+        elif not self.openai_chat_model:
+            errors.append("OPENAI_CHAT_MODEL не заполнен")
         return errors
 
 

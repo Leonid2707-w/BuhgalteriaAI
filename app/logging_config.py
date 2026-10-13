@@ -6,9 +6,7 @@ from app.services.security import RedactingFilter
 
 def configure_logging(level: str) -> None:
     Path("logs").mkdir(exist_ok=True)
-    formatter = logging.Formatter(
-        "%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
     handlers: list[logging.Handler] = [
         logging.StreamHandler(),
         logging.FileHandler("logs/finance_bot.log", encoding="utf-8"),

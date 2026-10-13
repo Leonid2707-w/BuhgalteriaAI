@@ -6,8 +6,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.config import load_settings  # noqa: E402
-from app.services.sheets import SheetsRepository  # noqa: E402
+from app.config import load_settings
+from app.services.sheets import SheetsRepository
 
 
 async def main() -> int:
@@ -23,7 +23,7 @@ async def main() -> int:
     )
     try:
         await repository.bootstrap()
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001 - CLI преобразует ошибку в краткое сообщение
         print(f"Не удалось подготовить таблицу: {error}")
         return 1
     print("Таблица подготовлена. Существующие данные не изменены.")

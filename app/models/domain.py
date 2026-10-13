@@ -50,7 +50,7 @@ class Account(DirectoryBase):
     account_id: str
     scope_id: str
     currency: str
-    opening_balance: Decimal = Decimal("0")
+    opening_balance: Decimal = Decimal(0)
 
 
 class ParsedOperation(BaseModel):
@@ -79,16 +79,19 @@ class ParsedOperation(BaseModel):
     clarification_question: str | None = None
     debt_direction: str | None = None
     due_date: date | None = None
-    paid_amount: Decimal = Decimal("0")
+    paid_amount: Decimal = Decimal(0)
     multiple_operations: bool = False
 
     @model_validator(mode="after")
     def validate_semantics(self) -> ParsedOperation:
         if self.intent != "create_transaction":
             raise ValueError("Поддерживается только intent=create_transaction")
-        if self.operation_type == OperationType.TRANSFER:
-            if self.account_from_id and self.account_from_id == self.account_to_id:
-                raise ValueError("Счета перевода должны различаться")
+        if (
+            self.operation_type == OperationType.TRANSFER
+            and self.account_from_id
+            and self.account_from_id == self.account_to_id
+        ):
+            raise ValueError("Счета перевода должны различаться")
         if self.paid_amount < 0:
             raise ValueError("paid_amount не может быть отрицательной")
         return self
@@ -103,11 +106,15 @@ class ParsedOperation(BaseModel):
             missing.add("currency")
         if not self.scope_id and not has_default_scope:
             missing.add("scope_id")
-        if self.operation_type in {
-            OperationType.EXPENSE,
-            OperationType.TRANSFER,
-            OperationType.DEBT_PAYMENT,
-        } and not self.account_from_id:
+        if (
+            self.operation_type
+            in {
+                OperationType.EXPENSE,
+                OperationType.TRANSFER,
+                OperationType.DEBT_PAYMENT,
+            }
+            and not self.account_from_id
+        ):
             missing.add("account_from_id")
         if self.operation_type == OperationType.INCOME and not self.account_to_id:
             missing.add("account_to_id")
@@ -148,12 +155,31 @@ class Transaction(BaseModel):
     def to_sheet_row(self) -> list[str | int | float]:
         data = self.model_dump()
         order = [
-            "transaction_id", "created_at", "operation_date", "telegram_user_id",
-            "source", "raw_text", "scope_id", "scope_name", "operation_type",
-            "amount", "currency", "account_from_id", "account_from_name",
-            "account_to_id", "account_to_name", "client_id", "client_name",
-            "project_id", "project_name", "category_id", "category_name",
-            "counterparty", "comment", "status", "reversal_of",
+            "transaction_id",
+            "created_at",
+            "operation_date",
+            "telegram_user_id",
+            "source",
+            "raw_text",
+            "scope_id",
+            "scope_name",
+            "operation_type",
+            "amount",
+            "currency",
+            "account_from_id",
+            "account_from_name",
+            "account_to_id",
+            "account_to_name",
+            "client_id",
+            "client_name",
+            "project_id",
+            "project_name",
+            "category_id",
+            "category_name",
+            "counterparty",
+            "comment",
+            "status",
+            "reversal_of",
         ]
         result: list[str | int | float] = []
         for key in order:
@@ -177,7 +203,7 @@ class Debt(BaseModel):
     counterparty: str
     amount: Decimal
     currency: str
-    paid_amount: Decimal = Decimal("0")
+    paid_amount: Decimal = Decimal(0)
     due_date: date | None = None
     client_id: str | None = None
     project_id: str | None = None

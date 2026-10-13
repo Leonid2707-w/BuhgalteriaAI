@@ -54,10 +54,14 @@ def calculate_balances(
         if tx.status != "confirmed":
             continue
         amount = tx.amount
-        if tx.operation_type in {
-            OperationType.EXPENSE,
-            OperationType.DEBT_PAYMENT,
-        } and tx.account_from_id in balances:
+        if (
+            tx.operation_type
+            in {
+                OperationType.EXPENSE,
+                OperationType.DEBT_PAYMENT,
+            }
+            and tx.account_from_id in balances
+        ):
             balances[tx.account_from_id] -= amount
         elif tx.operation_type == OperationType.INCOME and tx.account_to_id in balances:
             balances[tx.account_to_id] += amount
@@ -73,7 +77,7 @@ def report_totals(
     transactions: list[Transaction],
 ) -> dict[str, dict[str, Decimal]]:
     result: dict[str, dict[str, Decimal]] = defaultdict(
-        lambda: {"income": Decimal("0"), "expense": Decimal("0"), "net": Decimal("0")}
+        lambda: {"income": Decimal(0), "expense": Decimal(0), "net": Decimal(0)}
     )
     for tx in transactions:
         if tx.status != "confirmed":

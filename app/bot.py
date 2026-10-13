@@ -109,9 +109,7 @@ def _name(rows: list[dict[str, Any]], key: str, value: str | None) -> str:
     return str(next((row["name"] for row in rows if row.get(key) == value), value))
 
 
-def _card(
-    payload: dict[str, Any], directories: dict[str, list[dict[str, Any]]]
-) -> str:
+def _card(payload: dict[str, Any], directories: dict[str, list[dict[str, Any]]]) -> str:
     operation = ParsedOperation.model_validate(payload["operation"])
     labels = {
         "income": "доход",
@@ -149,7 +147,9 @@ async def _clarify_or_review(
     store: SQLiteStore,
 ) -> None:
     missing = operation.required_missing(
-        has_default_scope=any(_bool(row.get("is_default")) for row in directories["scopes"])
+        has_default_scope=any(
+            _bool(row.get("is_default")) for row in directories["scopes"]
+        )
     )
     if not operation.scope_id:
         default = next(
@@ -168,8 +168,17 @@ async def _clarify_or_review(
         for key, value in operation.model_dump().items()
         if key.startswith("suggested_") and value
     ]
-    if missing or operation.ambiguous_fields or suggested or operation.needs_clarification:
-        field = (missing + operation.ambiguous_fields)[0] if (missing or operation.ambiguous_fields) else "unknown"
+    if (
+        missing
+        or operation.ambiguous_fields
+        or suggested
+        or operation.needs_clarification
+    ):
+        field = (
+            (missing + operation.ambiguous_fields)[0]
+            if (missing or operation.ambiguous_fields)
+            else "unknown"
+        )
         payload["operation"] = operation.model_dump(mode="json")
         payload["waiting_field"] = field
         await store.save_draft(message.from_user.id, payload, "clarification")
@@ -179,7 +188,9 @@ async def _clarify_or_review(
         )
         if suggested:
             question += f"\nНе найдено в справочнике: {', '.join(suggested)}."
-            question += "\nСоздайте элемент в разделе Структура или выберите существующий."
+            question += (
+                "\nСоздайте элемент в разделе Структура или выберите существующий."
+            )
         await message.answer(question)
         return
     payload["operation"] = operation.model_dump(mode="json")
@@ -205,7 +216,11 @@ async def process_text(
             settings.timezone,
             directories,
         )
-        payload = {"operation": operation.model_dump(mode="json"), "raw_text": text, "source": source}
+        payload = {
+            "operation": operation.model_dump(mode="json"),
+            "raw_text": text,
+            "source": source,
+        }
         await _clarify_or_review(message, operation, payload, directories, store)
     except Exception:
         logger.exception("Ошибка разбора операции")
@@ -274,7 +289,12 @@ async def report(message: Message, sheets: SheetsRepository) -> None:
     try:
         _, transactions, _ = await sheets.load_finance()
         today = date.today()
-        current = [tx for tx in transactions if tx.operation_date.year == today.year and tx.operation_date.month == today.month]
+        current = [
+            tx
+            for tx in transactions
+            if tx.operation_date.year == today.year
+            and tx.operation_date.month == today.month
+        ]
         totals = report_totals(current)
         lines = ["Отчёт за текущий месяц"]
         for currency, values in sorted(totals.items()):
@@ -282,7 +302,9 @@ async def report(message: Message, sheets: SheetsRepository) -> None:
                 f"{currency}: доход {values['income']}, расход {values['expense']}, "
                 f"чистый поток {values['net']}"
             )
-        await message.answer("\n".join(lines) if totals else "За текущий месяц операций нет.")
+        await message.answer(
+            "\n".join(lines) if totals else "За текущий месяц операций нет."
+        )
     except Exception:
         logger.exception("Ошибка отчёта")
         await message.answer("Не удалось построить отчёт.")
@@ -297,7 +319,12 @@ async def debts(message: Message, sheets: SheetsRepository) -> None:
         lines = ["Активные долги"]
         for row in active:
             rest = Decimal(str(row["amount"])) - Decimal(str(row["paid_amount"] or 0))
-            overdue = " - просрочен" if row["due_date"] and date.fromisoformat(str(row["due_date"])) < date.today() else ""
+            overdue = (
+                " - просрочен"
+                if row["due_date"]
+                and date.fromisoformat(str(row["due_date"])) < date.today()
+                else ""
+            )
             lines.append(
                 f"{row['direction']} - {row['counterparty']}: {rest} {row['currency']}{overdue}"
             )
@@ -332,13 +359,30 @@ async def list_structure(callback: CallbackQuery, sheets: SheetsRepository) -> N
     for row in rows[:30]:
         active = _bool(row["is_active"])
         state = "архивировать" if active else "восстановить"
-        buttons.append([
-            InlineKeyboardButton(
-                text=f"{row['name']} - {state}",
-                callback_data=f"struct:toggle:{kind}:{row[id_key]}:{int(active)}",
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=f"{row['name']} - {state}",
+                    callback_data=f"struct:toggle:{kind}:{row[id_key]}:{int(active)}",
+                ),
+                InlineKeyboardButton(
+                    text="Переименовать",
+                    callback_data=f"struct:rename:{kind}:{row[id_key]}",
+                ),
+            ]
+        )
+        if kind == "scopes" and active and not _bool(row.get("is_default")):
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"{row['name']} - сделать по умолчанию",
+                        callback_data=f"struct:default:{row[id_key]}",
+                    )
+                ]
             )
-        ])
-    buttons.append([InlineKeyboardButton(text="Добавить", callback_data=f"struct:add:{kind}")])
+    buttons.append(
+        [InlineKeyboardButton(text="Добавить", callback_data=f"struct:add:{kind}")]
+    )
     await callback.message.edit_text(
         title, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
     )
@@ -355,13 +399,39 @@ async def toggle_structure(callback: CallbackQuery, sheets: SheetsRepository) ->
     await list_structure(callback, sheets)
 
 
+@router.callback_query(F.data.startswith("struct:rename:"))
+async def rename_structure(callback: CallbackQuery, store: SQLiteStore) -> None:
+    _, _, kind, entity_id = callback.data.split(":", 3)
+    await store.save_draft(
+        callback.from_user.id,
+        {
+            "structure_action": "rename",
+            "structure_kind": kind,
+            "structure_entity_id": entity_id,
+        },
+        "structure_rename",
+    )
+    await callback.message.answer("Введите новое название.")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("struct:default:"))
+async def default_scope(callback: CallbackQuery, sheets: SheetsRepository) -> None:
+    scope_id = callback.data.split(":", 2)[2]
+    changed = await sheets.set_default_scope(scope_id)
+    await callback.answer(
+        "Контур по умолчанию обновлён" if changed else "Не удалось выбрать контур",
+        show_alert=not changed,
+    )
+
+
 @router.callback_query(F.data.startswith("struct:add:"))
-async def add_structure(
-    callback: CallbackQuery, store: SQLiteStore
-) -> None:
+async def add_structure(callback: CallbackQuery, store: SQLiteStore) -> None:
     kind = callback.data.split(":")[2]
     await store.save_draft(
-        callback.from_user.id, {"structure_kind": kind}, "structure_add"
+        callback.from_user.id,
+        {"structure_action": "add", "structure_kind": kind},
+        "structure_add",
     )
     formats = {
         "scopes": "Название | валюта",
@@ -410,7 +480,11 @@ async def cancel(callback: CallbackQuery, store: SQLiteStore) -> None:
 async def edit(callback: CallbackQuery) -> None:
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=label.capitalize(), callback_data=f"tx:field:{field}")]
+            [
+                InlineKeyboardButton(
+                    text=label.capitalize(), callback_data=f"tx:field:{field}"
+                )
+            ]
             for field, label in EDIT_FIELDS.items()
         ]
     )
@@ -451,14 +525,19 @@ async def confirm(
         if operation.required_missing():
             raise ValueError("Не все обязательные поля заполнены")
         scope = _name(directories["scopes"], "scope_id", operation.scope_id)
-        if operation.operation_type in {OperationType.RECEIVABLE, OperationType.PAYABLE}:
+        if operation.operation_type in {
+            OperationType.RECEIVABLE,
+            OperationType.PAYABLE,
+        }:
             debt = Debt(
                 debt_id=f"debt_{uuid4().hex}",
                 created_at=datetime.now(UTC),
                 scope_id=operation.scope_id or "",
-                direction="receivable" if operation.operation_type == OperationType.RECEIVABLE else "payable",
+                direction="receivable"
+                if operation.operation_type == OperationType.RECEIVABLE
+                else "payable",
                 counterparty=operation.counterparty or "Не указан",
-                amount=operation.amount or Decimal("0"),
+                amount=operation.amount or Decimal(0),
                 currency=operation.currency or "",
                 due_date=operation.due_date,
                 client_id=operation.client_id,
@@ -466,12 +545,23 @@ async def confirm(
                 comment=operation.comment,
             )
             await sheets.append_row(
-                "Debts", [
-                    debt.debt_id, debt.created_at.isoformat(), "", debt.scope_id,
-                    debt.direction, debt.counterparty, float(debt.amount), debt.currency,
-                    float(debt.paid_amount), debt.due_date.isoformat() if debt.due_date else "",
-                    debt.client_id or "", debt.project_id or "", debt.status, debt.comment or "",
-                ]
+                "Debts",
+                [
+                    debt.debt_id,
+                    debt.created_at.isoformat(),
+                    "",
+                    debt.scope_id,
+                    debt.direction,
+                    debt.counterparty,
+                    float(debt.amount),
+                    debt.currency,
+                    float(debt.paid_amount),
+                    debt.due_date.isoformat() if debt.due_date else "",
+                    debt.client_id or "",
+                    debt.project_id or "",
+                    debt.status,
+                    debt.comment or "",
+                ],
             )
             record_id = debt.debt_id
         else:
@@ -485,25 +575,37 @@ async def confirm(
                 scope_id=operation.scope_id or "",
                 scope_name=scope,
                 operation_type=operation.operation_type,
-                amount=operation.amount or Decimal("0"),
+                amount=operation.amount or Decimal(0),
                 currency=operation.currency or "",
                 account_from_id=operation.account_from_id,
-                account_from_name=_name(directories["accounts"], "account_id", operation.account_from_id),
+                account_from_name=_name(
+                    directories["accounts"], "account_id", operation.account_from_id
+                ),
                 account_to_id=operation.account_to_id,
-                account_to_name=_name(directories["accounts"], "account_id", operation.account_to_id),
+                account_to_name=_name(
+                    directories["accounts"], "account_id", operation.account_to_id
+                ),
                 client_id=operation.client_id,
-                client_name=_name(directories["clients"], "client_id", operation.client_id),
+                client_name=_name(
+                    directories["clients"], "client_id", operation.client_id
+                ),
                 project_id=operation.project_id,
-                project_name=_name(directories["projects"], "project_id", operation.project_id),
+                project_name=_name(
+                    directories["projects"], "project_id", operation.project_id
+                ),
                 category_id=operation.category_id,
-                category_name=_name(directories["categories"], "category_id", operation.category_id),
+                category_name=_name(
+                    directories["categories"], "category_id", operation.category_id
+                ),
                 counterparty=operation.counterparty,
                 comment=operation.comment,
             )
             await sheets.append_transaction(transaction)
             for kind, entity_id in [
-                ("scope", operation.scope_id), ("client", operation.client_id),
-                ("project", operation.project_id), ("category", operation.category_id),
+                ("scope", operation.scope_id),
+                ("client", operation.client_id),
+                ("project", operation.project_id),
+                ("category", operation.category_id),
                 ("account", operation.account_from_id or operation.account_to_id),
             ]:
                 if entity_id:
@@ -518,15 +620,41 @@ async def confirm(
 
 
 async def _handle_structure_input(
-    message: Message, draft: dict[str, Any], sheets: SheetsRepository, store: SQLiteStore
+    message: Message,
+    draft: dict[str, Any],
+    sheets: SheetsRepository,
+    store: SQLiteStore,
 ) -> bool:
     kind = draft.get("structure_kind")
     if not kind:
         return False
+    if draft.get("structure_action") == "rename":
+        sheet, id_key, _ = SHEET_META[kind]
+        new_name = (message.text or "").strip()
+        if not new_name:
+            await message.answer("Название не может быть пустым.")
+            return True
+        changed = await sheets.rename(
+            sheet, id_key, draft["structure_entity_id"], new_name
+        )
+        if changed:
+            await store.delete_draft(message.from_user.id)
+            await message.answer(
+                "Название обновлено. Старые операции сохранили связь по ID."
+            )
+        else:
+            await message.answer("Элемент не найден.")
+        return True
     parts = [part.strip() for part in (message.text or "").split("|")]
     now = datetime.now(UTC).isoformat()
     entity_id = f"{kind[:-1]}_{uuid4().hex[:12]}"
-    expected = {"scopes": 2, "clients": 2, "projects": 3, "categories": 3, "accounts": 4}
+    expected = {
+        "scopes": 2,
+        "clients": 2,
+        "projects": 3,
+        "categories": 3,
+        "accounts": 4,
+    }
     if len(parts) != expected[kind]:
         await message.answer("Неверный формат. Разделяйте поля символом |.")
         return True
@@ -535,7 +663,15 @@ async def _handle_structure_input(
         "clients": [entity_id, parts[1], parts[0], "TRUE", now],
         "projects": [entity_id, parts[1], parts[2], parts[0], "TRUE", now],
         "categories": [entity_id, parts[1], parts[2], parts[0], "TRUE", now],
-        "accounts": [entity_id, parts[1], parts[0], parts[2].upper(), parts[3], "TRUE", now],
+        "accounts": [
+            entity_id,
+            parts[1],
+            parts[0],
+            parts[2].upper(),
+            parts[3],
+            "TRUE",
+            now,
+        ],
     }
     await sheets.append_row(SHEET_META[kind][0], rows[kind])
     await store.delete_draft(message.from_user.id)
@@ -553,7 +689,10 @@ async def voice(
     store: SQLiteStore,
     settings: Settings,
 ) -> None:
-    if message.voice.file_size and message.voice.file_size > settings.max_voice_size_mb * 1024 * 1024:
+    if (
+        message.voice.file_size
+        and message.voice.file_size > settings.max_voice_size_mb * 1024 * 1024
+    ):
         await message.answer(f"Голосовое больше {settings.max_voice_size_mb} МБ.")
         return
     path: Path | None = None
@@ -563,7 +702,9 @@ async def voice(
         await bot.download(message.voice.file_id, destination=path)
         text = await transcriber.transcribe(path)
         await message.answer(f"Расшифровка:\n{text}")
-        await process_text(message, text, "голосовое сообщение", parser, sheets, store, settings)
+        await process_text(
+            message, text, "голосовое сообщение", parser, sheets, store, settings
+        )
     except Exception:
         logger.exception("Ошибка распознавания голоса")
         await message.answer(
@@ -583,9 +724,12 @@ async def text(
     settings: Settings,
 ) -> None:
     draft = await store.get_draft(message.from_user.id)
-    if draft and draft.get("structure_kind"):
-        if await _handle_structure_input(message, draft, sheets, store):
-            return
+    if (
+        draft
+        and draft.get("structure_kind")
+        and await _handle_structure_input(message, draft, sheets, store)
+    ):
+        return
     if draft and draft.get("waiting_field"):
         field = draft.pop("waiting_field")
         operation = draft["operation"]
@@ -597,8 +741,10 @@ async def text(
             parsed = ParsedOperation.model_validate(operation)
             directories = await sheets.directories()
             await _clarify_or_review(message, parsed, draft, directories, store)
-        except Exception:
-            await message.answer("Значение не принято. Проверьте формат и попробуйте ещё раз.")
+        except Exception:  # noqa: BLE001 - пользователь не должен видеть stack trace
+            await message.answer(
+                "Значение не принято. Проверьте формат и попробуйте ещё раз."
+            )
         return
     await process_text(
         message, message.text, "текстовое сообщение", parser, sheets, store, settings
@@ -615,7 +761,9 @@ async def create_dispatcher(
     dispatcher = Dispatcher()
     dispatcher.update.outer_middleware(UpdateMiddleware(store))
     dispatcher.message.outer_middleware(AccessMiddleware(settings.allowed_user_ids))
-    dispatcher.callback_query.outer_middleware(AccessMiddleware(settings.allowed_user_ids))
+    dispatcher.callback_query.outer_middleware(
+        AccessMiddleware(settings.allowed_user_ids)
+    )
     dispatcher.include_router(router)
     dispatcher["settings"] = settings
     dispatcher["store"] = store
@@ -626,15 +774,17 @@ async def create_dispatcher(
 
 
 async def set_commands(bot: Bot) -> None:
-    await bot.set_my_commands([
-        BotCommand(command="start", description="Главное меню"),
-        BotCommand(command="help", description="Помощь"),
-        BotCommand(command="myid", description="Показать Telegram ID"),
-        BotCommand(command="add", description="Добавить операцию"),
-        BotCommand(command="balance", description="Баланс"),
-        BotCommand(command="report", description="Отчёты"),
-        BotCommand(command="debts", description="Долги"),
-        BotCommand(command="structure", description="Структура"),
-        BotCommand(command="undo", description="Отменить последнюю операцию"),
-        BotCommand(command="settings", description="Настройки"),
-    ])
+    await bot.set_my_commands(
+        [
+            BotCommand(command="start", description="Главное меню"),
+            BotCommand(command="help", description="Помощь"),
+            BotCommand(command="myid", description="Показать Telegram ID"),
+            BotCommand(command="add", description="Добавить операцию"),
+            BotCommand(command="balance", description="Баланс"),
+            BotCommand(command="report", description="Отчёты"),
+            BotCommand(command="debts", description="Долги"),
+            BotCommand(command="structure", description="Структура"),
+            BotCommand(command="undo", description="Отменить последнюю операцию"),
+            BotCommand(command="settings", description="Настройки"),
+        ]
+    )
