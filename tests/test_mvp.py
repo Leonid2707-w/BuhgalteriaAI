@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -14,7 +15,7 @@ from app.services.finance import (
     choose_default_scope,
     validate_directory_ids,
 )
-from app.services.security import is_user_allowed
+from app.services.security import RedactingFilter, is_user_allowed
 from app.services.sheets import SheetsRepository
 from app.storage.sqlite import SQLiteStore
 from app.utils.dates import parse_relative_date
@@ -199,3 +200,17 @@ def test_card_number_redaction() -> None:
     result = redact_sensitive(source)
     assert "4111" not in result
     assert "[СКРЫТО]" in result
+
+
+def test_logging_filter_preserves_argument_types() -> None:
+    record = logging.LogRecord(
+        "test",
+        logging.INFO,
+        "",
+        0,
+        "Bot id=%d, card=%s",
+        (8679765569, "4111 1111 1111 1111"),
+        None,
+    )
+    assert RedactingFilter().filter(record)
+    assert record.getMessage() == "Bot id=8679765569, card=[СКРЫТО]"

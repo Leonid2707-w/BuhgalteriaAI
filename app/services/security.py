@@ -17,8 +17,16 @@ def is_user_allowed(user_id: int, allowed_ids: frozenset[int]) -> bool:
 class RedactingFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         record.msg = redact_sensitive(str(record.msg))
-        if record.args:
-            record.args = tuple(redact_sensitive(str(arg)) for arg in record.args)
+        if isinstance(record.args, dict):
+            record.args = {
+                key: redact_sensitive(value) if isinstance(value, str) else value
+                for key, value in record.args.items()
+            }
+        elif record.args:
+            record.args = tuple(
+                redact_sensitive(arg) if isinstance(arg, str) else arg
+                for arg in record.args
+            )
         return True
 
 
