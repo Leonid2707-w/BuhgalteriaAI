@@ -4,6 +4,7 @@ import logging
 from datetime import date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 import pytest
 from pydantic import ValidationError
@@ -89,6 +90,10 @@ def test_relative_dates() -> None:
     assert parse_relative_date("сегодня", today) == today
     assert parse_relative_date("вчера", today) == date(2026, 10, 12)
     assert parse_relative_date("2026-09-27", today) == date(2026, 9, 27)
+
+
+def test_default_timezone_is_available() -> None:
+    assert ZoneInfo("Asia/Yekaterinburg").key == "Asia/Yekaterinburg"
 
 
 def transaction(**overrides: object) -> Transaction:
