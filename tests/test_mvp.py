@@ -3,10 +3,12 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
 
+from app.bot import UpdateMiddleware
 from app.models import Account, ParsedOperation, Scope, Transaction
 from app.models.domain import OperationType
 from app.services.finance import (
@@ -161,6 +163,24 @@ async def test_idempotency(tmp_path) -> None:
     await store.initialize()
     assert await store.claim_update(100)
     assert not await store.claim_update(100)
+
+
+@pytest.mark.asyncio
+async def test_update_middleware_reads_id_from_event(tmp_path) -> None:
+    store = SQLiteStore(tmp_path / "test.db")
+    await store.initialize()
+    middleware = UpdateMiddleware(store)
+    calls = 0
+
+    async def handler(event, data):
+        nonlocal calls
+        calls += 1
+        return "handled"
+
+    event = SimpleNamespace(update_id=101)
+    assert await middleware(handler, event, {}) == "handled"
+    assert await middleware(handler, event, {}) is None
+    assert calls == 1
 
 
 @pytest.mark.asyncio

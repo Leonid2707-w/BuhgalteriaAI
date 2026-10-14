@@ -93,7 +93,12 @@ class UpdateMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        update_id = data.get("event_update").update_id
+        update = data.get("event_update")
+        update_id = getattr(update, "update_id", None) or getattr(
+            event, "update_id", None
+        )
+        if update_id is None:
+            return await handler(event, data)
         if not await self.store.claim_update(update_id):
             return None
         return await handler(event, data)
